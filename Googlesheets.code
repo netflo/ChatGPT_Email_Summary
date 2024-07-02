@@ -1,0 +1,80 @@
+const MYREF = 0;
+const MAILDATE = 1;
+const MAILFROM = 2;
+const MAILTO = 3;
+const SUBJECT = 4;
+const SUMMARY = 5;
+const FULL = 6;
+
+var ukLocale = 'en-GB';
+var options = { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit' };
+
+function processEmails() {
+  var searchCriteria = 'your search criteria here';
+  var emails = GmailApp.search(searchCriteria);
+  var ws = SpreadsheetApp.getActiveSpreadsheet();
+  var ss = ws.getSheetByName("Sheet1");
+
+  ss.getRange(2, 1, ss.getLastRow() - 1, ss.getLastColumn()).clearContent();
+
+  emails.forEach(email => {
+    var messageThread = email.getMessages();
+    messageThread.forEach(msg => {
+      var msgDate = msg.getDate().toLocaleString(ukLocale, options);
+      var msgFrom = msg.getFrom();
+      var msgTo = msg.getTo();
+      var msgSubject = msg.getSubject();
+      var plainBody = msg.getPlainBody();
+      var summary = summarizeText(plainBody);
+      
+      ss.appendRow([msgDate, msgFrom, msgTo, msgSubject, plainBody, summary]);
+    });
+  });
+}
+
+// Define the API key and URL for the OpenAI API
+const OPENAI_API_KEY = 'YOUR_API_KEY_HERE';
+const OPENAI_API_URL = 'https://api.openai.com/v1/completions';
+
+/**
+ * Main function to summarize the given text
+ */
+function summarizeText(text) {
+  Logger.log('text: ' + text);
+  // Call the API and get the summary
+  const summary = getSummary(text);
+  Logger.log('Summary: ' + summary);
+  return summary;
+}
+
+function getSummary(text) {
+  // Create the request payload
+  const payload = {
+    model: "gpt-3.5-turbo",
+    prompt: "Summarize the following text:\n\n" + text,
+    max_tokens: 150,
+    temperature: 0.1
+  };
+
+  try {
+    // Make the API call
+    const response = UrlFetchApp.fetch(OPENAI_API_URL, {
+      method: 'post',
+      contentType: 'application/json',
+      headers: {
+        Authorization: 'Bearer ' + OPENAI_API_KEY
+      },
+      payload: JSON.stringify(payload)
+    });
+
+    // Parse the response
+    const json = JSON.parse(response.getContentText());
+
+    // Extract the summary from the response
+    const summary = json.choices[0].text.trim();
+    return summary;
+  } catch (error) {
+    Logger.log('Error: ' + error.message);
+    return 'Error summarizing text';
+  }
+}
